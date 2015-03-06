@@ -2719,7 +2719,7 @@ Dash.dependencies.TimelineConverter = function() {
             return representation.segmentAvailabilityRange;
         }
         checkTime = representation.adaptation.period.mpd.checkTime;
-        now = calcPresentationTimeFromWallTime(new Date(new Date().getTime()), representation.adaptation.period);
+        now = calcPresentationTimeFromWallTime(new Date(), representation.adaptation.period);
         start = Math.max(now - representation.adaptation.period.mpd.timeShiftBufferDepth, 0);
         end = isNaN(checkTime) ? now : Math.min(checkTime, now);
         range = {
@@ -5058,9 +5058,11 @@ MediaPlayer.dependencies.Stream = function() {
                                 }
                             }
                         } else {
-                            self.debug.log("DRM: Could not select key system from ContentProtection elements!");
+                            self.debug.log("DRM: Could not select key system from ContentProtection elements!  Falling back to needkey mechanism...");
+                            self.protectionModel.subscribe(MediaPlayer.models.ProtectionModel.eventList.ENAME_NEED_KEY, self);
+                            self.protectionModel.subscribe(MediaPlayer.models.ProtectionModel.eventList.ENAME_KEY_SYSTEM_SELECTED, self);
                         }
-                        self.protectionModel.unsubscribe(MediaPlayer.models.ProtectionModel.eventList.ENAME_KEY_SYSTEM_SELECTED, this);
+                        self.protectionModel.unsubscribe(MediaPlayer.models.ProtectionModel.eventList.ENAME_KEY_SYSTEM_SELECTED, ksSelected);
                     };
                     keySystem = null;
                     this.protectionModel.subscribe(MediaPlayer.models.ProtectionModel.eventList.ENAME_KEY_SYSTEM_SELECTED, ksSelected);
@@ -6863,7 +6865,7 @@ MediaPlayer.dependencies.ProtectionController = function() {
             this.log("DRM: License request successful.  Session ID = " + e.data.requestData.getSessionID());
             this.updateKeySession(e.data.requestData, e.data.message);
         } else {
-            this.debug.log("DRM: License request failed! -- " + e.error);
+            this.log("DRM: License request failed! -- " + e.error);
         }
     }, onKeySystemSelected = function() {
         this.protectionModel.keySystem.subscribe(MediaPlayer.dependencies.protection.KeySystem.eventList.ENAME_LICENSE_REQUEST_COMPLETE, this);
@@ -7641,17 +7643,19 @@ MediaPlayer.dependencies.ProtectionExtensions = function() {
         },
         getSupportedKeySystemsFromContentProtection: function(cps) {
             var cp, ks, ksIdx, cpIdx, supportedKS = [];
-            for (ksIdx = 0; ksIdx < keySystems.length; ++ksIdx) {
-                ks = keySystems[ksIdx];
-                for (cpIdx = 0; cpIdx < cps.length; ++cpIdx) {
-                    cp = cps[cpIdx];
-                    if (cp.schemeIdUri.toLowerCase() === ks.schemeIdURI) {
-                        var initData = ks.getInitData(cp);
-                        if (!!initData) {
-                            supportedKS.push({
-                                ks: keySystems[ksIdx],
-                                initData: initData
-                            });
+            if (cps) {
+                for (ksIdx = 0; ksIdx < keySystems.length; ++ksIdx) {
+                    ks = keySystems[ksIdx];
+                    for (cpIdx = 0; cpIdx < cps.length; ++cpIdx) {
+                        cp = cps[cpIdx];
+                        if (cp.schemeIdUri.toLowerCase() === ks.schemeIdURI) {
+                            var initData = ks.getInitData(cp);
+                            if (!!initData) {
+                                supportedKS.push({
+                                    ks: keySystems[ksIdx],
+                                    initData: initData
+                                });
+                            }
                         }
                     }
                 }
@@ -8805,7 +8809,7 @@ MediaPlayer.models.ProtectionModel_21Jan2015 = function() {
                 self.notify(MediaPlayer.models.ProtectionModel.eventList.ENAME_KEY_SYSTEM_ACCESS_COMPLETE, keySystemAccess);
             }).catch(function() {
                 if (++i < ksConfigurations.length) {
-                    requestKeySystemAccessInternal(ksConfigurations, i);
+                    requestKeySystemAccessInternal.call(self, ksConfigurations, i);
                 } else {
                     self.notify(MediaPlayer.models.ProtectionModel.eventList.ENAME_KEY_SYSTEM_ACCESS_COMPLETE, null, "Key system access denied!");
                 }
@@ -8870,6 +8874,7 @@ MediaPlayer.models.ProtectionModel_21Jan2015 = function() {
         notify: undefined,
         subscribe: undefined,
         unsubscribe: undefined,
+        protectionExt: undefined,
         keySystem: null,
         setup: function() {
             eventHandler = createEventHandler.call(this);
