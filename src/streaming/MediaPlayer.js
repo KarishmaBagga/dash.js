@@ -72,6 +72,7 @@ MediaPlayer = function (context) {
         streamController,
         rulesController,
         manifestUpdater,
+        playbackController,
         metricsExt,
         metricsModel,
         videoModel,
@@ -106,8 +107,15 @@ MediaPlayer = function (context) {
             streamController.subscribe(MediaPlayer.dependencies.StreamController.eventList.ENAME_STREAMS_COMPOSED, manifestUpdater);
             manifestLoader.subscribe(MediaPlayer.dependencies.ManifestLoader.eventList.ENAME_MANIFEST_LOADED, streamController);
             manifestLoader.subscribe(MediaPlayer.dependencies.ManifestLoader.eventList.ENAME_MANIFEST_LOADED, manifestUpdater);
+
+            playbackController.subscribe(MediaPlayer.dependencies.PlaybackController.eventList.ENAME_PLAYBACK_STARTED, manifestUpdater);
+            playbackController.subscribe(MediaPlayer.dependencies.PlaybackController.eventList.ENAME_PLAYBACK_PAUSED, manifestUpdater);
+            playbackController.subscribe(MediaPlayer.dependencies.PlaybackController.eventList.ENAME_PLAYBACK_SEEKING, streamController);
+            playbackController.subscribe(MediaPlayer.dependencies.PlaybackController.eventList.ENAME_PLAYBACK_TIME_UPDATED, streamController);
+            playbackController.subscribe(MediaPlayer.dependencies.PlaybackController.eventList.ENAME_CAN_PLAY, streamController);
+            playbackController.subscribe(MediaPlayer.dependencies.PlaybackController.eventList.ENAME_PLAYBACK_ERROR, streamController);
+
             streamController.initialize();
-            streamController.setVideoModel(videoModel);
             streamController.setAutoPlay(autoPlay);
             streamController.setProtectionData(protectionData);
             DOMStorage.checkInitialBitrate();
@@ -224,9 +232,18 @@ MediaPlayer = function (context) {
                 streamController.unsubscribe(MediaPlayer.dependencies.StreamController.eventList.ENAME_STREAMS_COMPOSED, manifestUpdater);
                 manifestLoader.unsubscribe(MediaPlayer.dependencies.ManifestLoader.eventList.ENAME_MANIFEST_LOADED, streamController);
                 manifestLoader.unsubscribe(MediaPlayer.dependencies.ManifestLoader.eventList.ENAME_MANIFEST_LOADED, manifestUpdater);
+
+                playbackController.unsubscribe(MediaPlayer.dependencies.PlaybackController.eventList.ENAME_PLAYBACK_STARTED, manifestUpdater);
+                playbackController.unsubscribe(MediaPlayer.dependencies.PlaybackController.eventList.ENAME_PLAYBACK_PAUSED, manifestUpdater);
+                playbackController.unsubscribe(MediaPlayer.dependencies.PlaybackController.eventList.ENAME_PLAYBACK_SEEKING, streamController);
+                playbackController.unsubscribe(MediaPlayer.dependencies.PlaybackController.eventList.ENAME_PLAYBACK_TIME_UPDATED, streamController);
+                playbackController.unsubscribe(MediaPlayer.dependencies.PlaybackController.eventList.ENAME_CAN_PLAY, streamController);
+                playbackController.unsubscribe(MediaPlayer.dependencies.PlaybackController.eventList.ENAME_PLAYBACK_ERROR, streamController);
+
                 streamController.reset();
                 abrController.reset();
                 rulesController.reset();
+                playbackController.reset();
                 streamController = null;
                 playing = false;
             }
@@ -270,6 +287,7 @@ MediaPlayer = function (context) {
             rulesController = system.getObject("rulesController");
             metricsModel = system.getObject("metricsModel");
             DOMStorage = system.getObject("DOMStorage");
+            playbackController = system.getObject("playbackController");
         },
 
         /**
@@ -766,7 +784,8 @@ MediaPlayer.events = {
     METRIC_UPDATED: "metricupdated",
     METRIC_ADDED: "metricadded",
     MANIFEST_LOADED: "manifestloaded",
-    SWITCH_STREAM: "streamswitched",
+    STREAM_SWITCH_STARTED: "streamswitchstarted",
+    STREAM_SWITCH_COMPLETED: "streamswitchcompleted",
     STREAM_INITIALIZED: "streaminitialized",
     TEXT_TRACK_ADDED: "texttrackadded",
     BUFFER_LOADED: "bufferloaded",
